@@ -1,18 +1,4 @@
 {
-    "python.pythonPath": "${workspaceFolder}\\py36\\Scripts\\python.exe",
-    "cSpell.words": [
-        "dotenv",
-        "envvar"
-    ],
-    "python.linting.pylintEnabled": true,
-    "python.linting.enabled": true,
-    "python.linting.pylintUseMinimalCheckers": true,
-    "python.linting.pylintArgs": [
-        "--max-line-length=200"
-    ],
-    "python.formatting.provider": "autopep8",
-    "python.formatting.autopep8Args": [
-        "--max-line-length",
-        "200"
-    ]
+    "python.linting.pylintEnabled": false,
+    "python.pythonPath": "C:\\Users\\shenwe\\AppData\\Local\\Programs\\Python\\Python36\\python.exe"
 }

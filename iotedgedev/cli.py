@@ -5,6 +5,7 @@ from __future__ import absolute_import
 import hashlib
 import os
 import sys
+import json
 
 import click
 from fstrings import f
@@ -19,6 +20,9 @@ from .runtime import Runtime
 from .solution import Solution
 from .utility import Utility
 from .edge import Edge
+from .cert import Cert
+from .edgemanager import EdgeManager, ResponseError
+from edgectl.utils.edgeutils import EdgeUtils
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'], max_content_width=120)
@@ -53,6 +57,90 @@ def main(set_config, az_cli=None):
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
             sys.exit()
+
+
+@click.command(context_settings=CONTEXT_SETTINGS, help="create cert files")
+@click.option('--certdir',
+              required=False,
+              default=".",
+              help="Create new edgeHub cert and module cert. Use `-certdir <dir>` to create in the <dir>")
+def createcert(certdir):
+    hostname = EdgeUtils.get_hostname()
+    cert = Cert(output, certdir, hostname)
+    cert.generate()
+
+@click.command(context_settings=CONTEXT_SETTINGS, help="add module to device")
+@click.option('--connectionstring',
+              required=True,
+              help="Add a module to the device.")
+@click.argument("name", required=True)
+def addmodule(connectionstring, name):
+    values = connectionstring.split(';')
+    hostPrefix = 'HostName='
+    devicePrefix = 'DeviceId='
+    keyPrefix = 'SharedAccessKey='
+    hostname = ''
+    deviceId = ''
+    key = ''
+
+    for value in values:
+        stripped = value.strip()
+        if (stripped.startswith(hostPrefix)):
+            hostname = stripped[len(hostPrefix):]
+        elif (stripped.startswith(devicePrefix)):
+            deviceId = stripped[len(devicePrefix):]
+        elif (stripped.startswith(keyPrefix)):
+            key = stripped[len(keyPrefix):]
+    
+    edgemanager = EdgeManager(output, hostname, EdgeUtils.get_hostname(), deviceId, key)
+    output.info(edgemanager.getOrAddModule(name)) 
+
+
+@click.command(context_settings=CONTEXT_SETTINGS, help="start the edgeHub in test mode")
+@click.option('--certdir',
+              required=False,
+              default=".",
+              help="Create new edgeHub cert and module cert. Use `-certdir <dir>` to create in the <dir>")
+@click.option('--connectionstring',
+              required=False,
+              default=None,
+              help="Add a module to the device.")
+@click.option('--configfile',
+              required=False,
+              default=None,
+              help="Start edgehub in test mode with the config file")
+def teststart(certdir, connectionstring, configfile):
+    gateway = "cn-shenwe-test.fareast.corp.microsoft.com" #EdgeUtils.get_hostname()
+    # cert = Cert(output, certdir, gateway)
+    # cert.generate()
+
+    if (configfile != None):
+        with open(configfile) as f:
+            jsonObj = json.load(f)
+            connectionstring = jsonObj['connectionString']
+            certdir = jsonObj['certs']
+    
+    values = connectionstring.split(';')
+    hostPrefix = 'HostName='
+    devicePrefix = 'DeviceId='
+    keyPrefix = 'SharedAccessKey='
+    hostname = ''
+    deviceId = ''
+    key = ''
+
+    for value in values:
+        stripped = value.strip()
+        if (stripped.startswith(hostPrefix)):
+            hostname = stripped[len(hostPrefix):]
+        elif (stripped.startswith(devicePrefix)):
+            deviceId = stripped[len(devicePrefix):]
+        elif (stripped.startswith(keyPrefix)):
+            key = stripped[len(keyPrefix):]
+    
+    edgemanager = EdgeManager(output, hostname, gateway, deviceId, key)
+    output.info(edgemanager.teststart(None, certdir))
+
+
 
 
 @click.command(context_settings=CONTEXT_SETTINGS, help="Manage IoT Edge Solutions")
@@ -596,6 +684,9 @@ main.add_command(start)
 main.add_command(restart)
 main.add_command(stop)
 main.add_command(monitor)
+main.add_command(createcert)
+main.add_command(addmodule)
+main.add_command(teststart)
 
 if __name__ == "__main__":
     main()

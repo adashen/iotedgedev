@@ -9,7 +9,7 @@ import subprocess
 import sys
 from time import time
 if sys.version_info.major >= 3:
-    from urllib.parse import quote, urlencode
+    from urllib.parse import quote, quote_plus, urlencode
 else:
     from urllib import quote, urlencode
 from .moduletype import ModuleType
@@ -57,7 +57,7 @@ class Utility:
 
     def get_iot_hub_sas_token(self, uri, key, policy_name, expiry=3600):
         ttl = time() + expiry
-        sign_key = "%s\n%d" % ((quote(uri)), int(ttl))
+        sign_key = "%s\n%d" % ((quote_plus(uri)), int(ttl))
         signature = b64encode(
             HMAC(b64decode(key), sign_key.encode("utf-8"), sha256).digest())
 
