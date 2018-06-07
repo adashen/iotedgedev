@@ -22,12 +22,26 @@ class ResponseError(Exception):
         return self.status_code
 
 class EdgeManager(object):
-    def __init__(self, output, hostname, gateway, deviceId, key):
+    def __init__(self, connectionstring, gateway, output):
+        values = connectionstring.split(';')
+        hostPrefix = 'HostName='
+        devicePrefix = 'DeviceId='
+        keyPrefix = 'SharedAccessKey='
+        hostname = ''
+        deviceId = ''
+        key = ''
+
+    for value in values:
+        stripped = value.strip()
+        if (stripped.startswith(hostPrefix)):
+            self.hostname = stripped[len(hostPrefix):]
+        elif (stripped.startswith(devicePrefix)):
+            self.deviceId = stripped[len(devicePrefix):]
+        elif (stripped.startswith(keyPrefix)):
+            self.key = stripped[len(keyPrefix):]
+
         self.output = output
-        self.hostname = hostname
-        self.deviceId = deviceId
         self.gateway = gateway
-        self.key = key
         self.deviceUri = "{0}/devices/{1}".format(self.hostname, self.deviceId)
         self.utility = Utility(None, self.output)
 
@@ -42,6 +56,14 @@ class EdgeManager(object):
             return hubTemplate.format(self.hostname, deviceId, moduleId, sasKey)
         else:
             return moduleTemplate.format(self.hostname, self.gateway, deviceId, moduleId, sasKey)
+    
+    def _generateRoutesEnvFromInputs(self, inputs):
+        routes = ['routes__output=FROM /messages/modules/target/outputs/* INTO BrokeredEndpoint("/modules/input/inputs/print")']
+        routeTemplate = 'routes__r{0}=FROM /messages/modules/input/outputs/{1} INTO BrokeredEndpoint("/modules/target/inputs/{2}")'
+        for (idx, input) in enumerate(inputs):
+            routes.append(routeTemplate.format(idx+1, input, input))
+
+        return routes
 
     def addmodule(self, name):
         moduleUri = "https://{0}/devices/{1}/modules/{2}?api-version=2017-11-08-preview".format(self.hostname, self.deviceId, name)
@@ -88,7 +110,7 @@ class EdgeManager(object):
             else:
                 output.error(adderr.message())
 
-    def teststart(self, routes, certPath):
+    def teststart(self, inputs, certPath):
         edgeHubConstr = self.getOrAddModule('$edgeHub')
         edgeHubImg = 'microsoft/azureiotedge-hub:1.0-preview'
 
@@ -104,15 +126,17 @@ class EdgeManager(object):
         network = dockerclient.networks.get(nw_name)
         edgedockerclient.create_volume('edgemoduletest')
         edgedockerclient.create_volume('edgehubtest')
-        #todo: add local config source
-
         network_config = docker_api.create_networking_config({
             nw_name: docker_api.create_endpoint_config(
                 aliases=[self.gateway]
             )
         })
 
-        # p = os.path.join(certPath, 'edgehub')
+        hubEnv = ["EdgeModuleHubServerCAChainCertificateFile=/mnt/edgehub/edge-chain-ca.cert.pem",
+                    "EdgeModuleHubServerCertificateFile=/mnt/edgehub/edge-hub-server.cert.pfx",
+                    "IotHubConnectionString={0}".format(edgeHubConstr),
+                    "configSource=local"]
+        hubEnv.extend(self._generateRoutesEnvFromInputs(inputs))
         hubContainer = docker_api.create_container(
             edgeHubImg,
             name='edgehub', 
@@ -121,12 +145,6 @@ class EdgeManager(object):
                 mounts=[
                     docker.types.Mount('/mnt/edgehub', 'edgehubtest')
                 ],
-                # binds={
-                #     p: {
-                #         'bind': '/mnt/edgehub',
-                #         'mode': 'rw'
-                #     }
-                # },
                 port_bindings={
                     '8883/tcp': [
                         ('0.0.0.0', 8883),
@@ -135,10 +153,7 @@ class EdgeManager(object):
                 }
             ),
             networking_config=network_config,
-            environment=[
-                "EdgeModuleHubServerCAChainCertificateFile=/mnt/edgehub/edge-chain-ca.cert.pem",
-                "EdgeModuleHubServerCertificateFile=/mnt/edgehub/edge-hub-server.cert.pfx",
-                "IotHubConnectionString={0}".format(edgeHubConstr)], 
+            environment=hubEnv, 
             ports=[(8883, 'tcp'), (443, 'tcp')]
         )
 
@@ -148,20 +163,16 @@ class EdgeManager(object):
         edgedockerclient.copy_file_to_volume('edgehub', 'edge-chain-ca.cert.pem', '/mnt/edgehub', os.path.join(certPath, 'edge-chain-ca', 'cert', 'edge-chain-ca.cert.pem'))
         edgedockerclient.copy_file_to_volume('edgehub', 'edge-hub-server.cert.pfx', '/mnt/edgehub', os.path.join(certPath, 'edge-hub-server', 'cert', 'edge-hub-server.cert.pfx'))
         
-
+        inputEnv = ["EdgeModuleCACertificateFile=/mnt/edgemodule/edge-device-ca.cert.pem",
+                    "EdgeHubConnectionString={0}".format(inputConstr)]
         inputContainer = dockerclient.containers.create(
             inputImage,
             name='input',
-            # volumes={
-            #     os.path.join(certPath, 'edgemodule'): {'bind': '/mnt/edgemodule', 'mode': 'rw' }
-            # }, 
             mounts=[
                 docker.types.Mount('/mnt/edgemodule', 'edgemoduletest')
             ],
             network=nw_name,
-            environment=[
-                "EdgeModuleCACertificateFile=/mnt/edgemodule/edge-device-ca.cert.pem",
-                "EdgeHubConnectionString={0}".format(inputConstr)],
+            environment=inputEnv,
             ports={'3000/tcp':3000}
         )
 

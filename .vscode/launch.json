@@ -11,10 +11,6 @@
                 "teststart",
                 "--configfile",
                 "D:/tests/EdgeSolution/modules/SampleModule/.vscode/edgehub.json"
-                // "--certdir",
-                // "D:\\docs\\projects\\edge\\test\\certs",
-                // "--connectionstring",
-                // "HostName=shenweIotHub.azure-devices.net;DeviceId=mylaptop2;SharedAccessKey=xxRm9j/2+uaJ0trCbEizaMS37osiP/KJJzkeVmkMTsw="
             ],
             "debugOptions": [
                 "RedirectOutput"
