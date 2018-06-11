@@ -10,6 +10,8 @@ from .utility import Utility
 from .cert import Cert
 from edgectl.host.dockerclient import EdgeDockerClient
 
+label = "edgehubtest"
+
 class ResponseError(Exception):
     def __init__(self, status_code, value):
         self.value = value
@@ -31,14 +33,14 @@ class EdgeManager(object):
         deviceId = ''
         key = ''
 
-    for value in values:
-        stripped = value.strip()
-        if (stripped.startswith(hostPrefix)):
-            self.hostname = stripped[len(hostPrefix):]
-        elif (stripped.startswith(devicePrefix)):
-            self.deviceId = stripped[len(devicePrefix):]
-        elif (stripped.startswith(keyPrefix)):
-            self.key = stripped[len(keyPrefix):]
+        for value in values:
+            stripped = value.strip()
+            if (stripped.startswith(hostPrefix)):
+                self.hostname = stripped[len(hostPrefix):]
+            elif (stripped.startswith(devicePrefix)):
+                self.deviceId = stripped[len(devicePrefix):]
+            elif (stripped.startswith(keyPrefix)):
+                self.key = stripped[len(keyPrefix):]
 
         self.output = output
         self.gateway = gateway
@@ -109,6 +111,13 @@ class EdgeManager(object):
                     output.error(geterr.message())
             else:
                 output.error(adderr.message())
+    
+    @staticmethod
+    def stop():
+        dockerclient = docker.from_env()
+        docker_api = docker.APIClient()
+        edgedockerclient = EdgeDockerClient(dockerclient)
+        edgedockerclient.stop_by_label(label)
 
     def teststart(self, inputs, certPath):
         edgeHubConstr = self.getOrAddModule('$edgeHub')
@@ -121,6 +130,15 @@ class EdgeManager(object):
         docker_api = docker.APIClient()
 
         edgedockerclient = EdgeDockerClient(dockerclient)
+        status = edgedockerclient.status("edgehub")
+        if status != None: 
+            edgedockerclient.stop("edgehub")
+            edgedockerclient.remove("edgehub")
+        status = edgedockerclient.status("input")
+        if status != None:
+            edgedockerclient.stop("input")
+            edgedockerclient.remove("input")
+
         nw_name = 'azure-iot-edge'
         edgedockerclient.create_network(nw_name)
         network = dockerclient.networks.get(nw_name)
@@ -153,15 +171,14 @@ class EdgeManager(object):
                 }
             ),
             networking_config=network_config,
-            environment=hubEnv, 
+            environment=hubEnv,
+            labels=[label],
             ports=[(8883, 'tcp'), (443, 'tcp')]
         )
 
-        docker_api.start(hubContainer.get('Id'))
-
-    
         edgedockerclient.copy_file_to_volume('edgehub', 'edge-chain-ca.cert.pem', '/mnt/edgehub', os.path.join(certPath, 'edge-chain-ca', 'cert', 'edge-chain-ca.cert.pem'))
         edgedockerclient.copy_file_to_volume('edgehub', 'edge-hub-server.cert.pfx', '/mnt/edgehub', os.path.join(certPath, 'edge-hub-server', 'cert', 'edge-hub-server.cert.pfx'))
+        docker_api.start(hubContainer.get('Id'))
         
         inputEnv = ["EdgeModuleCACertificateFile=/mnt/edgemodule/edge-device-ca.cert.pem",
                     "EdgeHubConnectionString={0}".format(inputConstr)]
@@ -173,6 +190,7 @@ class EdgeManager(object):
             ],
             network=nw_name,
             environment=inputEnv,
+            labels=[label],
             ports={'3000/tcp':3000}
         )
 

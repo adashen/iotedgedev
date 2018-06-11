@@ -81,11 +81,21 @@ def createcert(certdir, gatewayhost):
 @click.option('--gatewayhost',
               required=False,
               help="GatewayHostName value for the module to connect. Default is the FQDN of the device")
+@click.option('--outputfile',
+              required=False,
+              help="Output connection into file")
 @click.argument("name", required=True)
-def addmodule(connectionstring, gatewayhost, name):
+def addmodule(connectionstring, gatewayhost, outputfile, name):
     edgemanager = EdgeManager(connectionstring, gatewayhost, output)
     connstr = edgemanager.getOrAddModule(name)
-    output.info(connstr)
+    if outputfile:
+        jsonObj = None
+        with open(outputfile, 'r') as f:
+            jsonObj = json.load(f)
+        with open(outputfile, 'w') as f:
+            jsonObj['EdgeHubConnectionString'] = connstr
+            json.dump(jsonObj, f,  indent=4, sort_keys=True)
+    # output.info(connstr)
     return connstr
 
 @click.command(context_settings=CONTEXT_SETTINGS, help="start the edgeHub in test mode")
@@ -128,6 +138,10 @@ def teststart(certdir, connectionstring, gatewayhost, inputs, configfile):
     # TODO: input validation
     edgemanager = EdgeManager(connectionstring, gatewayhost, output)
     output.info(edgemanager.teststart(inputs, certdir))
+
+@click.command(context_settings=CONTEXT_SETTINGS, help="stop the edgeHub in test mode")
+def teststop():
+    EdgeManager.stop()
 
 
 @click.command(context_settings=CONTEXT_SETTINGS, help="Manage IoT Edge Solutions")
@@ -674,6 +688,7 @@ main.add_command(monitor)
 main.add_command(createcert)
 main.add_command(addmodule)
 main.add_command(teststart)
+main.add_command(teststop)
 
 if __name__ == "__main__":
     main()
