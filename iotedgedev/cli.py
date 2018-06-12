@@ -138,6 +138,8 @@ def teststart(certdir, connectionstring, gatewayhost, inputs, configfile):
     # TODO: input validation
     edgemanager = EdgeManager(connectionstring, gatewayhost, output)
     output.info(edgemanager.teststart(inputs, certdir))
+    inputGuidence = "Please call REST API: POST http://localhost:3000/api/v1/messages with Content-Type application/json and body schema {'inputName': '', 'data': ''}"
+    output.info(inputGuidence)
 
 @click.command(context_settings=CONTEXT_SETTINGS, help="stop the edgeHub in test mode")
 def teststop():

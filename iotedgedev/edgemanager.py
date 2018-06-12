@@ -130,6 +130,8 @@ class EdgeManager(object):
         docker_api = docker.APIClient()
 
         edgedockerclient = EdgeDockerClient(dockerclient)
+        edgedockerclient.pull(edgeHubImg, None, None)
+        edgedockerclient.pull(inputImage, None, None)
         status = edgedockerclient.status("edgehub")
         if status != None: 
             edgedockerclient.stop("edgehub")
